@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String      @id @default(cuid())
+  nome       String
+  email      String      @unique
+  senha      String
+  role       String
+  empresa    String?
+  documento  String?
+  saldo      Float       @default(0.0)
+  createdAt  DateTime    @default(now())
+  lotes      Lote[]
+  vendas     Venda[]     @relation("Vendedor")
+  compras    Venda[]     @relation("Comprador")
+  transacoes Transacao[]
+  properties Property[]  // ← nova linha
+}
+
+model Lote {
+  id            String   @id @default(cuid())
+  nome          String
+  tipo          String   
+  descricao     String?
+  quantidade    Float    
+  vendidos      Float    @default(0.0)
+  preco         Float
+  certificadora String   @default("Verra VCS")
+  status        String   @default("ativo") 
+  userId        String
+  vendedor      User     @relation(fields: [userId], references: [id])
+  vendas        Venda[]
+}
+
+model Venda {
+  id          String   @id @default(cuid())
+  data        DateTime @default(now())
+  quantidade  Float
+  valorTotal  Float
+  loteId      String
+  lote        Lote     @relation(fields: [loteId], references: [id])
+  vendedorId  String
+  vendedor    User     @relation("Vendedor", fields: [vendedorId], references: [id])
+  compradorId String
+  comprador   User     @relation("Comprador", fields: [compradorId], references: [id])
+}
+
+model Transacao {
+  id        String   @id @default(cuid())
+  type      String
+  cert      String
+  amount    Float
+  price     Float
+  total     Float
+  status    String   @default("pago")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Property {
+  id        String   @id @default(cuid())
+  name      String
+  area      Float
+  car       String?
+  status    String   @default("ativo")
+  co2       Float    @default(0.0)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
