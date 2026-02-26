@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
@@ -29,9 +28,9 @@ function ChartTip({ active, payload, label, prefix = "", color = "#10b981" }) {
 }
 
 // --- MODAL DE ADICIONAR SALDO ---
-function ModalSaldo({ onClose, onConfirm, themeColor }) {
+function ModalSaldo({ onClose, onConfirm, themeColor, loading }) {
   const [valor, setValor] = useState("");
-  const [erro, setErro] = useState("");
+  const [erro, setErro]   = useState("");
   const valores = [500, 1000, 5000, 10000];
 
   const handleConfirm = () => {
@@ -52,7 +51,7 @@ function ModalSaldo({ onClose, onConfirm, themeColor }) {
         </div>
         <p style={{ fontSize: "11px", fontWeight: "700", color: "#9ca3af", textTransform: "uppercase", marginBottom: "10px" }}>Valores Rápidos</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "20px" }}>
-          {valores.map((v) => (
+          {valores.map(v => (
             <button key={v} onClick={() => { setValor(String(v)); setErro(""); }}
               style={{ padding: "12px", borderRadius: "12px", border: `2px solid ${valor === String(v) ? themeColor : "#e5e7eb"}`, background: valor === String(v) ? `${themeColor}15` : "#f9fafb", color: valor === String(v) ? themeColor : "#374151", fontWeight: "700", fontSize: "14px", cursor: "pointer" }}>
               {fmt(v)}
@@ -62,13 +61,15 @@ function ModalSaldo({ onClose, onConfirm, themeColor }) {
         <p style={{ fontSize: "11px", fontWeight: "700", color: "#9ca3af", textTransform: "uppercase", marginBottom: "8px" }}>Ou digite o valor</p>
         <div style={{ position: "relative", marginBottom: "8px" }}>
           <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", fontSize: "14px", fontWeight: "700", color: "#9ca3af" }}>R$</span>
-          <input type="number" placeholder="0,00" value={valor} onChange={(e) => { setValor(e.target.value); setErro(""); }}
+          <input type="number" placeholder="0,00" value={valor} onChange={e => { setValor(e.target.value); setErro(""); }}
             style={{ width: "100%", padding: "12px 14px 12px 40px", borderRadius: "12px", border: `2px solid ${erro ? "#ef4444" : "#e5e7eb"}`, fontSize: "16px", fontWeight: "700", boxSizing: "border-box", outline: "none" }} />
         </div>
         {erro && <p style={{ color: "#ef4444", fontSize: "13px", marginBottom: "12px" }}>⚠️ {erro}</p>}
         <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
           <button onClick={onClose} style={{ flex: 1, padding: "14px", borderRadius: "12px", border: "2px solid #e5e7eb", background: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer" }}>Cancelar</button>
-          <button onClick={handleConfirm} style={{ flex: 1, padding: "14px", borderRadius: "12px", border: "none", background: themeColor, color: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer" }}>Confirmar Depósito</button>
+          <button onClick={handleConfirm} disabled={loading} style={{ flex: 1, padding: "14px", borderRadius: "12px", border: "none", background: themeColor, color: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
+            {loading ? "Salvando..." : "Confirmar Depósito"}
+          </button>
         </div>
         <p style={{ textAlign: "center", fontSize: "11px", color: "#d1d5db", marginTop: "16px" }}>🔒 Simulação para fins de apresentação</p>
       </div>
@@ -80,51 +81,46 @@ export default function Dashboard() {
   const { ready, user, balance, setBalance, transactions, properties, showToast, role } = useApp();
   const router = useRouter();
   const [showModalSaldo, setShowModalSaldo] = useState(false);
+  const [savingDeposit, setSavingDeposit]   = useState(false);
 
   useEffect(() => {
-  if (!ready) return;
-  if (!user) {
-    router.replace("/login");
-  } else if (role === "vendedor") {
-    router.replace("/vendedor"); // ← redireciona vendedor para o painel correto
-  }
-}, [user, ready, role, router]);
-
-  // --- GRÁFICO DE EVOLUÇÃO: agrupa transações por mês ---
-  const monthlyData = useMemo(() => {
-
-    const base = [
-    { m: "Set", total: 0, volume: 0 },
-    { m: "Out", total: 0, volume: 0 },
-    { m: "Nov", total: 0, volume: 0 },
-    { m: "Dez", total: 0, volume: 0 },
-    { m: "Jan", total: 0, volume: 0 },
-    { m: "Fev", total: 0, volume: 0 },
-  ];
-     if (!transactions?.length) return base;
-
-  const mesMap = { "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr", "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago", "09": "Set", "10": "Out", "11": "Nov", "12": "Dez" };
-
-  transactions.forEach((t) => {
-    const parts = t.date?.split(" ")[0]?.split("/");
-    if (!parts || parts.length < 2) return;
-    const mesAbrev = mesMap[parts[1]];
-    if (!mesAbrev) return;
-    const entry = base.find((b) => b.m === mesAbrev);
-    if (entry) {
-      entry.total += t.total || 0;
-      entry.volume += t.amount || 0;
+    if (!ready) return;
+    if (!user) {
+      router.replace("/login");
+    } else if (role === "vendedor") {
+      router.replace("/vendedor");
     }
-  });
+  }, [user, ready, role, router]);
 
-  return base;
-}, [transactions]);
+  const monthlyData = useMemo(() => {
+    const base = [
+      { m: "Set", total: 0, volume: 0 },
+      { m: "Out", total: 0, volume: 0 },
+      { m: "Nov", total: 0, volume: 0 },
+      { m: "Dez", total: 0, volume: 0 },
+      { m: "Jan", total: 0, volume: 0 },
+      { m: "Fev", total: 0, volume: 0 },
+    ];
+    if (!transactions?.length) return base;
+    const mesMap = { "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr", "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago", "09": "Set", "10": "Out", "11": "Nov", "12": "Dez" };
+    transactions.forEach(t => {
+      const parts = t.date?.split(" ")[0]?.split("/");
+      if (!parts || parts.length < 2) return;
+      const mesAbrev = mesMap[parts[1]];
+      if (!mesAbrev) return;
+      const entry = base.find(b => b.m === mesAbrev);
+      if (entry) {
+        entry.total  += t.total  || 0;
+        entry.volume += t.amount || 0;
+      }
+    });
+    return base;
+  }, [transactions]);
 
-  // --- GRÁFICO DE PIZZA: agrupa por tipo de crédito ---
   const pieData = useMemo(() => {
     if (!transactions?.length) return [];
     const map = {};
-    transactions.forEach((t) => {
+    transactions.forEach(t => {
       const tipo = t.type || "Outro";
       if (!map[tipo]) map[tipo] = { name: tipo, value: 0 };
       map[tipo].value += t.amount || 0;
@@ -134,27 +130,61 @@ export default function Dashboard() {
 
   if (!ready || !user) return null;
 
-  const isVendedor = role === "vendedor";
-  const themeColor = isVendedor ? "#0ea5e9" : "#10b981";
+  const isVendedor    = role === "vendedor";
+  const themeColor    = isVendedor ? "#0ea5e9" : "#10b981";
   const themeGradient = isVendedor
     ? "linear-gradient(135deg,#0c4a6e,#0284c7)"
     : "linear-gradient(135deg,#064e3b,#14532d)";
 
-  const totalCO2 = transactions?.reduce((s, t) => s + (t.amount || 0), 0) || 0;
-  const totalVal = transactions?.reduce((s, t) => s + (t.total || 0), 0) || 0;
+  const totalCO2     = transactions?.reduce((s, t) => s + (t.amount || 0), 0) || 0;
+  const totalVal     = transactions?.reduce((s, t) => s + (t.total  || 0), 0) || 0;
   const numProperties = properties?.length || 0;
 
-  const handleAddSaldo = (valor) => {
-    setBalance((prev) => prev + valor);
+  // ── salva depósito no banco ──────────────────────────────────────────────────
+  const handleAddSaldo = async (valor) => {
+    const novoSaldo = balance + valor;
+
+    // Atualiza UI imediatamente
+    setBalance(novoSaldo);
     showToast(`${fmt(valor)} adicionado à carteira!`, "success");
     setShowModalSaldo(false);
+
+    // Persiste no banco
+    setSavingDeposit(true);
+    try {
+      const res = await fetch("/api/usuarios/saldo", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, saldo: novoSaldo }),
+      });
+      if (!res.ok) throw new Error("Falha ao salvar");
+
+      // Atualiza localStorage para manter consistência
+      const saved = localStorage.getItem("cleantrade_user");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.saldo = novoSaldo;
+        localStorage.setItem("cleantrade_user", JSON.stringify(parsed));
+      }
+    } catch {
+      showToast("Saldo atualizado localmente, mas erro ao salvar no banco.", "error");
+      // Reverte se falhar
+      setBalance(balance);
+    } finally {
+      setSavingDeposit(false);
+    }
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, animation: "slideIn 0.4s ease-out" }}>
 
       {showModalSaldo && (
-        <ModalSaldo themeColor={themeColor} onClose={() => setShowModalSaldo(false)} onConfirm={handleAddSaldo} />
+        <ModalSaldo
+          themeColor={themeColor}
+          loading={savingDeposit}
+          onClose={() => setShowModalSaldo(false)}
+          onConfirm={handleAddSaldo}
+        />
       )}
 
       {/* BANNER */}
@@ -191,43 +221,34 @@ export default function Dashboard() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
-
         {/* GRÁFICO EVOLUÇÃO */}
-<div style={{ background: "#fff", borderRadius: 20, padding: 24, border: "1px solid #e5e7eb" }}>
-  <SectionHeader title="Desempenho por Mês" action={<Btn small variant="ghost" onClick={() => generateReport(transactions || [], role)}>{Icons.download} CSV</Btn>} />
-  <div style={{ height: 180, marginTop: 20 }}>
-    {monthlyData.length > 0 ? (
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={monthlyData}>
-          <defs>
-            <linearGradient id="colorTheme" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={themeColor} stopOpacity={0.25} />
-              <stop offset="95%" stopColor={themeColor} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <XAxis dataKey="m" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} dy={10} />
-          <Tooltip content={<ChartTip prefix="R$ " color={themeColor} />} />
-          <Area
-            type="monotone"
-            dataKey="total"
-            stroke={themeColor}
-            strokeWidth={4}        /* ← linha visível */
-            fill="url(#colorTheme)"
-            dot={{ fill: themeColor, strokeWidth: 2, r: 4 }}         /* ← pontos nos dados */
-            activeDot={{ r: 6, fill: themeColor }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    ) : (
-      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13 }}>
-        Nenhuma transação ainda
-      </div>
-    )}
-  </div>
-</div>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 24, border: "1px solid #e5e7eb" }}>
+          <SectionHeader title="Desempenho por Mês" action={<Btn small variant="ghost" onClick={() => generateReport(transactions || [], role)}>{Icons.download} CSV</Btn>} />
+          <div style={{ height: 180, marginTop: 20 }}>
+            {monthlyData.some(d => d.total > 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyData}>
+                  <defs>
+                    <linearGradient id="colorTheme" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={themeColor} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={themeColor} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="m" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#9ca3af" }} dy={10} />
+                  <Tooltip content={<ChartTip prefix="R$ " color={themeColor} />} />
+                  <Area type="monotone" dataKey="total" stroke={themeColor} strokeWidth={4} fill="url(#colorTheme)" dot={{ fill: themeColor, strokeWidth: 2, r: 4 }} activeDot={{ r: 6, fill: themeColor }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13 }}>
+                Nenhuma transação ainda
+              </div>
+            )}
+          </div>
+        </div>
 
-        {/* GRÁFICO PIZZA — baseado nos tipos comprados */}
-        <div style={{ background: "#fff", borderRadius: 20, padding: 24, border: "1px solid #e5e7eb", position: "relative" }}>
+        {/* GRÁFICO PIZZA */}
+        <div style={{ background: "#fff", borderRadius: 20, padding: 24, border: "1px solid #e5e7eb" }}>
           <p style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>Distribuição por Tipo</p>
           <div style={{ height: 180 }}>
             {pieData.length > 0 ? (
@@ -245,7 +266,6 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          {/* Legenda */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: 12 }}>
             {pieData.map((d, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#6b7280" }}>
@@ -261,15 +281,13 @@ export default function Dashboard() {
       <div style={{ background: "#fff", borderRadius: 20, padding: 24, border: "1px solid #e5e7eb", marginBottom: 20 }}>
         <SectionHeader title="Movimentações" action={<Btn small variant="outline" onClick={() => generateReport(transactions || [], role)}>Relatório</Btn>} />
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
-          {transactions?.slice(0, 5).map((t) => (
+          {transactions?.slice(0, 5).map(t => (
             <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px", background: "#fcfdfc", borderRadius: 14, border: "1px solid #f1f5f1" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: t.type?.includes("Venda") ? (isVendedor ? "#f0f9ff" : "#f0fdf4") : "#f5f3ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {t.type?.includes("Venda") ? "💰" : "🌿"}
-                </div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center" }}>🌿</div>
                 <div>
                   <p style={{ fontSize: 15, fontWeight: 700 }}>{t.type}</p>
-                  <p style={{ fontSize: 12, color: "#9ca3af" }}>{t.date} • ID: {t.cert}</p>
+                  <p style={{ fontSize: 12, color: "#9ca3af" }}>{t.date} · {t.cert}</p>
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
@@ -279,7 +297,7 @@ export default function Dashboard() {
             </div>
           ))}
           {(!transactions || transactions.length === 0) && (
-            <p style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Nenhuma movimentação encontrada.</p>
+            <p style={{ textAlign: "center", color: "#9ca3af", padding: "20px" }}>Nenhuma movimentação encontrada.</p>
           )}
         </div>
       </div>
