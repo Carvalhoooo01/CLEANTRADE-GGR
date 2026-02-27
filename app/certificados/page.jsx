@@ -13,13 +13,19 @@ const STATUS_CORES = {
 };
 
 export default function CertificadosPage() {
-  const { role, certsSeller, certsBuyer, showToast } = useApp();
-  const allCerts = role === "vendedor" ? certsSeller : certsBuyer;
+  // Adicionado 'ready' para garantir que o sistema carregou
+  const { role, certsSeller, certsBuyer, showToast, ready } = useApp();
+
+  // Proteção: se certsSeller ou certsBuyer forem undefined, vira um array vazio []
+  const allCerts = (role === "vendedor" ? certsSeller : certsBuyer) || [];
 
   const [filter, setFilter] = useState("todos");
   const [validating, setValidating] = useState(false);
 
-  const filtered = filter === "todos" ? allCerts : allCerts.filter((c) => c.status === filter);
+  // Proteção no filtro
+  const filtered = filter === "todos" 
+    ? allCerts 
+    : allCerts.filter((c) => c?.status === filter);
 
   // --- FUNÇÃO: GERAR DIPLOMA DO CRÉDITO (PDF) ---
   const handleDownloadDiploma = async (cert) => {
@@ -75,6 +81,15 @@ export default function CertificadosPage() {
     }, 2000);
   };
 
+  // Se o contexto ainda não estiver pronto, mostra um estado de carregamento amigável
+  if (!ready) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>
+        Carregando seus certificados...
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, paddingBottom: 40 }}>
       
@@ -88,12 +103,13 @@ export default function CertificadosPage() {
         <div style={{ marginTop: 20, display: "flex", gap: 30 }}>
           <div>
             <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 700 }}>ESTOQUE TOTAL</span>
-            <div style={{ fontSize: 32, fontWeight: 900 }}>{allCerts.length} t</div>
+            <div style={{ fontSize: 32, fontWeight: 900 }}>{allCerts?.length || 0} t</div>
           </div>
           <div style={{ borderLeft: "1px solid rgba(255,255,255,0.3)", paddingLeft: 20 }}>
             <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 700 }}>DISPONÍVEL Venda</span>
             <div style={{ fontSize: 32, fontWeight: 900 }}>
-              {allCerts.filter(c => c.status === "disponível").length} t
+              {/* Proteção adicionada aqui com o operador '?' */}
+              {allCerts?.filter(c => c?.status === "disponível").length || 0} t
             </div>
           </div>
         </div>
@@ -132,46 +148,51 @@ export default function CertificadosPage() {
         </Btn>
       </div>
 
-      {/* Lista de Créditos (Estilo Card de Ativo) */}
+      {/* Lista de Créditos */}
       <div style={{ display: "grid", gap: 12 }}>
-        {filtered.map((cert) => (
-          <div 
-            key={cert.id} 
-            style={{ 
-              background: "#fff", borderRadius: 14, padding: 18, border: "1px solid #e2e8f0",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              transition: "transform 0.2s"
-            }}
-          >
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <div style={{ width: 44, height: 44, background: "#f0fdf4", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-                {cert.status === "disponível" ? "🔓" : "🔒"}
-              </div>
-              <div>
-                <p style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 800, color: "#1e293b" }}>{cert.id}</p>
-                <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                   <Badge label={`Safra ${cert.year}`} color="#f1f5f9" />
-                   <span style={{ fontSize: 12, color: "#94a3b8" }}>1 Tonelada CO2e</span>
+        {filtered.length > 0 ? (
+          filtered.map((cert) => (
+            <div 
+              key={cert.id} 
+              style={{ 
+                background: "#fff", borderRadius: 14, padding: 18, border: "1px solid #e2e8f0",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                transition: "transform 0.2s"
+              }}
+            >
+              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <div style={{ width: 44, height: 44, background: "#f0fdf4", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+                  {cert.status === "disponível" ? "🔓" : "🔒"}
+                </div>
+                <div>
+                  <p style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 800, color: "#1e293b" }}>{cert.id}</p>
+                  <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                     <Badge label={`Safra ${cert.year}`} color="#f1f5f9" />
+                     <span style={{ fontSize: 12, color: "#94a3b8" }}>1 Tonelada CO2e</span>
+                  </div>
                 </div>
               </div>
+              
+              <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                <Badge 
+                  label={cert.status?.toUpperCase() || "PENDENTE"} 
+                  color={STATUS_CORES[cert.status] || "#cbd5e1"} 
+                />
+                <button 
+                  onClick={() => handleDownloadDiploma(cert)}
+                  style={{ background: "none", border: "none", color: "#16a34a", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  {Icons.download} Diploma
+                </button>
+              </div>
             </div>
-            
-            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-              <Badge 
-                label={cert.status.toUpperCase()} 
-                color={STATUS_CORES[cert.status]} 
-              />
-              <button 
-                onClick={() => handleDownloadDiploma(cert)}
-                style={{ background: "none", border: "none", color: "#16a34a", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-              >
-                {Icons.download} Diploma
-              </button>
-            </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 14, marginTop: 20 }}>
+            Nenhum certificado encontrado para este filtro.
+          </p>
+        )}
       </div>
-
     </div>
   );
 }

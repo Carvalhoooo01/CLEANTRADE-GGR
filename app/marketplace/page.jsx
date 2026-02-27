@@ -6,21 +6,32 @@ import { Card, Badge, Btn } from "@/components/ui";
 import { Icons } from "@/components/Icons";
 import { fmt, fmtCO2, STATUS_COLORS } from "@/data/constants";
 
+// --- COMPONENTE DE INPUT DE VALOR (DESIGN ORIGINAL + LÓGICA DE DADOS REAIS) ---
 function Input({ label, value, onChange, placeholder, type = "text" }) {
+  // Tratamento para aceitar vírgula e ponto corretamente (Lógica de Dados Reais)
+  const handleInputChange = (val) => {
+    let cleaned = val.replace(",", ".");
+    if (/^\d*\.?\d*$/.test(cleaned) || cleaned === "") {
+      onChange(cleaned);
+    }
+  };
+
   return (
     <div>
       <label style={{ fontSize: "12px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "5px" }}>{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+      <input 
+        type={type} // Usamos "text" para type-safety de decimais, mas com inputMode
+        inputMode="decimal"
+        value={value} 
+        onChange={e => handleInputChange(e.target.value)} 
         placeholder={placeholder}
-        style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 12px", fontSize: "13px", outline: "none", fontFamily: "inherit", color: "#111827" }}
+        style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 12px", fontSize: "13px", outline: "none", fontFamily: "inherit", color: "#111827" }} 
       />
     </div>
   );
 }
 
+// --- COMPONENTE DE MODAL (MANTIDO DESIGN ORIGINAL) ---
 function Modal({ title, onClose, children }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -35,91 +46,94 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// --- COMPONENTE SPARK (MANTIDO DESIGN ORIGINAL) ---
 function Spark({ up }) {
   return <span style={{ fontSize: "12px", color: up ? "#16a34a" : "#dc2626" }}>{up ? "▲" : "▼"}</span>;
 }
 
 export default function MarketplacePage() {
-  const { user, market, setMarket, balance, setBalance, setTx, showToast } = useApp();
+  const { user, market, fetchMarket, balance, setBalance, setTx, setVendas, showToast, ready } = useApp();
   const [buying, setBuying] = useState(null);
   const [qty, setQty] = useState("1");
   const [loading, setLoading] = useState(false);
 
+  // --- FUNÇÃO DE COMPRA (LÓGICA DE DADOS REAIS - PERSISTÊNCIA NO BANCO) ---
   const handleBuy = async () => {
     const q = parseFloat(qty);
-    if (!q || q <= 0)         return showToast("Quantidade inválida", "error");
+    if (!q || q <= 0) return showToast("Quantidade inválida", "error");
     if (q > buying.available) return showToast("Quantidade maior que o disponível", "error");
+    
     const total = q * buying.price;
-    if (total > balance)      return showToast("Saldo insuficiente", "error");
+    if (total > balance) return showToast("Saldo insuficiente", "error");
 
-    const novoSaldo = balance - total;
-    const novaTransacao = {
-      id: Date.now(),
-      type: buying.type,
-      cert: buying.cert,
-      date: new Date().toLocaleDateString("pt-BR") + " " + new Date().toLocaleTimeString("pt-BR").slice(0, 5),
-      amount: q,
-      price: buying.price,
-      total,
-      status: "pago",
-    };
-
-    // Atualiza local imediatamente para UX instantânea
-    setBalance(novoSaldo);
-    setTx((t) => [novaTransacao, ...t]);
-    setMarket((m) =>
-      m.map((item) => item.id === buying.id ? { ...item, available: item.available - q } : item)
-       .filter((item) => item.available > 0)
-    );
-    setBuying(null);
-    setQty("1");
-    showToast(`Compra realizada: ${fmtCO2(q)} por ${fmt(total)}`, "success");
-
-    // Salva no banco em paralelo
     setLoading(true);
+
     try {
-      await Promise.all([
-        fetch("/api/transacoes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: user.id,
-            type: buying.type,
-            cert: buying.cert,
-            amount: q,
-            price: buying.price,
-            total,
-            status: "pago",
-          }),
+      // 1. Processa a Transação no Banco de Dados (API Real em endpoint unificado)
+      // Você precisará criar a API "/api/marketplace/buy" no backend
+      const response = await fetch("/api/marketplace/buy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          compradorId: user.id,
+          vendedorId: buying.vendedorId,
+          loteId: buying.id,
+          quantidade: q,
+          precoUnitario: buying.price,
+          total: total,
+          tipo: buying.type,
+          cert: buying.cert
         }),
-        fetch("/api/usuarios/saldo", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user.id, saldo: novoSaldo }),
-        }),
-      ]);
-    } catch {
-      showToast("Compra salva localmente, mas erro ao sincronizar com banco.", "error");
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Erro ao processar compra");
+
+      // 2. Só atualiza a interface se o banco de dados confirmou o sucesso
+      setBalance(data.novoSaldo);
+      setTx(prev => [data.transacao, ...prev]);
+      if (data.venda) setVendas(prev => [data.venda, ...prev]);
+      
+      // 3. Recarrega o mercado para pegar as quantidades atualizadas do banco
+      await fetchMarket();
+
+      showToast(`Compra realizada com sucesso: ${fmtCO2(q)}`, "success");
+      setBuying(null);
+      setQty("1");
+
+    } catch (err) {
+      showToast(err.message, "error");
+      console.error("Erro na compra:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Se o contexto não estiver pronto, mostra carregamento para evitar o erro de "undefined"
+  if (!ready) {
+    return <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Buscando ofertas do mercado...</div>;
+  }
+
+  // --- RENDERIZAÇÃO PRINCIPAL (MANTIDO DESIGN ORIGINAL) ---
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <Card>
         <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#111827", fontFamily: "'Playfair Display',serif", marginBottom: "4px" }}>
           Marketplace de Créditos de Carbono
         </h2>
-        <p style={{ fontSize: "13px", color: "#9ca3af", marginBottom: "20px" }}>Créditos certificados disponíveis para compra</p>
+        <p style={{ fontSize: "13px", color: "#9ca3af", marginBottom: "20px" }}>Dados sincronizados em tempo real com a rede</p>
 
+        {/* --- LISTA DE CARDS DO MERCADO (DESIGN ORIGINAL) --- */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "14px" }}>
-          {market.map((item) => (
+          {market.map(item => (
             <div key={item.id}
-              style={{ border: "1px solid #e5e7eb", borderRadius: "14px", padding: "20px", transition: "box-shadow 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 6px 20px rgba(22,163,74,0.12)")}
-              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}>
+              style={{ border: "1px solid #e5e7eb", borderRadius: "14px", padding: "20px", background: "#fff", transition: "box-shadow 0.2s" }}
+              onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 6px 20px rgba(22,163,74,0.12)")}
+              onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+            >
 
+              {/* Cabeçalho do Card */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
                 <div>
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{item.name}</h3>
@@ -128,13 +142,14 @@ export default function MarketplacePage() {
                 <Badge label={item.status} color={STATUS_COLORS[item.status]} />
               </div>
 
+              {/* Detalhes do Lote */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
                 {[
                   ["Certificadora", item.cert],
-                  ["Origem",        "Estoque Verificado"],
-                  ["Local",         "Diversas"],
-                  ["Disponível",    fmtCO2(item.available)],
-                  ["Preço",         `${fmt(item.price)}/tCO₂`],
+                  ["Origem", item.vendedorId ? "Fazenda Produtora" : "Estoque Verificado"], // Ajuste para Dados Reais
+                  ["Local", "Diversas"],
+                  ["Disponível", fmtCO2(item.available)],
+                  ["Preço", `${fmt(item.price)}/tCO₂`],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontSize: "12px", color: "#6b7280" }}>{k}:</span>
@@ -143,6 +158,7 @@ export default function MarketplacePage() {
                 ))}
               </div>
 
+              {/* Rodapé do Card (Com Spark e Botão) */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <Spark up={item.up} />
@@ -157,12 +173,13 @@ export default function MarketplacePage() {
 
           {market.length === 0 && (
             <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "40px", color: "#9ca3af" }}>
-              Nenhum crédito disponível no momento.
+              Nenhum crédito disponível no banco de dados no momento.
             </div>
           )}
         </div>
       </Card>
 
+      {/* --- MODAL DE COMPRA (DESIGN ORIGINAL) --- */}
       {buying && (
         <Modal title={`Comprar ${buying.name}`} onClose={() => setBuying(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -177,8 +194,10 @@ export default function MarketplacePage() {
               </div>
             </div>
 
-            <Input label="Quantidade (tCO₂)" value={qty} onChange={setQty} type="number" placeholder="ex: 1" />
+            {/* Input Tratado para Aceitar Ponto/Vírgula (Lógica de Dados Reais) */}
+            <Input label="Quantidade (tCO₂)" value={qty} onChange={setQty} placeholder="ex: 1" />
 
+            {/* Subtotal e Saldo Futuro (Lógica de Dados Reais) */}
             <div style={{ background: "#fafafa", borderRadius: "10px", padding: "14px", border: "1px solid #e5e7eb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                 <span style={{ fontSize: "12px", color: "#6b7280" }}>Subtotal</span>
@@ -192,10 +211,11 @@ export default function MarketplacePage() {
               </div>
             </div>
 
+            {/* Ações do Modal */}
             <div style={{ display: "flex", gap: "10px" }}>
               <Btn variant="outline" onClick={() => setBuying(null)} style={{ flex: 1, justifyContent: "center" }}>Cancelar</Btn>
               <Btn onClick={handleBuy} disabled={loading} style={{ flex: 1, justifyContent: "center" }}>
-                {loading ? "Salvando..." : <>{Icons.check} Confirmar Compra</>}
+                {loading ? "Processando..." : <>{Icons.check} Confirmar Compra</>}
               </Btn>
             </div>
           </div>
