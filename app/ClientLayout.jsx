@@ -30,20 +30,24 @@ function Toast() {
   );
 }
 
-// Páginas exclusivas de comprador
-const COMPRADOR_PAGES = ["/", "/marketplace", "/historico", "/certificados", "/propriedades"];
-// Páginas exclusivas de vendedor
-const VENDEDOR_PAGES = ["/vendedor", "/lotes", "/vendas", "/nova-oferta"];
+// Páginas exclusivas de comprador (vendedor será redirecionado)
+const COMPRADOR_ONLY = ["/", "/marketplace", "/historico"];
+
+// Páginas exclusivas de vendedor (comprador será redirecionado)
+const VENDEDOR_ONLY = ["/vendedor", "/meus-lotes", "/vendas", "/nova-oferta"];
+
+// Páginas compartilhadas (ambos os roles podem acessar):
+// /certificados, /propriedades, /inventario, /monitoramento,
+// /compliance, /financeiro, /cooperativa, /perfil, /projetos
 
 export default function ClientLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
   const { ready, user, role } = useApp();
 
   const isLoginPage = pathname === "/login";
 
-  // Redirect centralizado baseado no role
   useEffect(() => {
     if (!ready || isLoginPage) return;
 
@@ -52,12 +56,14 @@ export default function ClientLayout({ children }) {
       return;
     }
 
-    if (role === "vendedor" && COMPRADOR_PAGES.includes(pathname)) {
+    // Vendedor tentando acessar página exclusiva de comprador
+    if (role === "vendedor" && COMPRADOR_ONLY.includes(pathname)) {
       router.replace("/vendedor");
       return;
     }
 
-    if (role === "comprador" && VENDEDOR_PAGES.includes(pathname)) {
+    // Comprador tentando acessar página exclusiva de vendedor
+    if (role === "comprador" && VENDEDOR_ONLY.includes(pathname)) {
       router.replace("/");
       return;
     }
@@ -70,21 +76,10 @@ export default function ClientLayout({ children }) {
       background: isLoginPage ? "#fff" : "#f4f7f4",
       transition: "background 0.3s ease"
     }}>
+      {!isLoginPage && <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />}
 
-      {!isLoginPage && (
-        <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
-      )}
-
-      <div style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        minWidth: 0,
-        height: "100vh"
-      }}>
-
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh" }}>
         {!isLoginPage && <Header />}
-
         <main style={{
           flex: 1,
           padding: isLoginPage ? "0" : "24px 30px",
