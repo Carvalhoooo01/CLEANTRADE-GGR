@@ -4,38 +4,54 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id         String      @id @default(cuid())
-  nome       String
-  email      String      @unique
-  senha      String
-  role       String
-  empresa    String?
-  documento  String?
-  saldo      Float       @default(0.0)
-  createdAt  DateTime    @default(now())
-  lotes      Lote[]
-  vendas     Venda[]     @relation("Vendedor")
-  compras    Venda[]     @relation("Comprador")
-  transacoes Transacao[]
-  properties Property[]  // ← nova linha
+  id             String          @id @default(cuid())
+  nome           String
+  email          String          @unique
+  senha          String
+  role           String          @default("comprador")
+  empresa        String?
+  documento      String?
+  saldo          Float           @default(0.0)
+  createdAt      DateTime        @default(now())
+  certificados   Certificado[]
+  compliances    Compliance[]
+  contribuicoes  Contribuicao[]
+  lotes          Lote[]
+  membro         Membro?
+  monitoramentos Monitoramento[]
+  movimentos     Movimento[]
+  projetos       Projeto[]
+  properties     Property[]
+  transacoes     Transacao[]
+  compras        Venda[]         @relation("Comprador")
+  vendas         Venda[]         @relation("Vendedor")
 }
 
 model Lote {
-  id            String   @id @default(cuid())
-  nome          String
-  tipo          String   
-  descricao     String?
-  quantidade    Float    
-  vendidos      Float    @default(0.0)
-  preco         Float
-  certificadora String   @default("Verra VCS")
-  status        String   @default("ativo") 
-  userId        String
-  vendedor      User     @relation(fields: [userId], references: [id])
-  vendas        Venda[]
+  id             String          @id @default(cuid())
+  nome           String
+  tipo           String
+  descricao      String?
+  quantidade     Float
+  vendidos       Float           @default(0.0)
+  preco          Float
+  certificadora  String          @default("Verra VCS")
+  status         String          @default("ativo")
+  userId         String
+  createdAt      DateTime        @default(now())
+  serialVerra    String?
+  tipoCert       String?         @default("EXISTENTE")
+  urlMapa        String?
+  compliances    Compliance[]
+  contribuicoes  Contribuicao[]
+  vendedor       User            @relation(fields: [userId], references: [id])
+  monitoramentos Monitoramento[]
+  projetos       Projeto[]
+  vendas         Venda[]
 }
 
 model Venda {
@@ -44,34 +60,186 @@ model Venda {
   quantidade  Float
   valorTotal  Float
   loteId      String
-  lote        Lote     @relation(fields: [loteId], references: [id])
   vendedorId  String
-  vendedor    User     @relation("Vendedor", fields: [vendedorId], references: [id])
   compradorId String
   comprador   User     @relation("Comprador", fields: [compradorId], references: [id])
+  lote        Lote     @relation(fields: [loteId], references: [id])
+  vendedor    User     @relation("Vendedor", fields: [vendedorId], references: [id])
 }
 
+// Modelo unificado — cobre extrato financeiro, PIX e venda coletiva
 model Transacao {
-  id        String   @id @default(cuid())
-  type      String
-  cert      String
-  amount    Float
-  price     Float
-  total     Float
-  status    String   @default("pago")
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  type       String                        // deposito | saque | BUY | SELL | venda_coletiva
+  cert       String
+  amount     Float
+  price      Float
+  total      Float
+  status     String   @default("pago")    // pago | pendente | expirado | cancelado
+  userId     String
+  createdAt  DateTime @default(now())
+
+  // Campos PIX — preenchidos apenas em transacoes do tipo deposito via PIX
+  txid       String?  @unique             // ID unico da cobranca PIX (BCB)
+  pixPayload String?                      // Payload EMV/QR Code gerado
+
+  user       User     @relation(fields: [userId], references: [id])
 }
 
 model Property {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
   area      Float
   car       String?
-  status    String   @default("ativo")
-  co2       Float    @default(0.0)
+  status    String    @default("ativo")
+  co2       Float     @default(0.0)
+  lat       Float?
+  lng       Float?
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  projetos  Projeto[]
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Cooperativa {
+  id              String          @id @default(cuid())
+  nome            String
+  cnpj            String?         @unique
+  descricao       String?
+  taxaAdesao      Float           @default(300.0)
+  comissao        Float           @default(15.0)
+  saldoFundo      Float           @default(0.0)
+  createdAt       DateTime        @default(now())
+  poolTotal       Float           @default(0.0)
+  contribuicoes   Contribuicao[]
+  membros         Membro[]
+  movimentos      Movimento[]
+  vendasColetivas VendaColetiva[]
+}
+
+model Membro {
+  id             String          @id @default(cuid())
+  userId         String          @unique
+  cooperativaId  String
+  plano          String          @default("basico")
+  status         String          @default("ativo")
+  taxaPaga       Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  compliances    Compliance[]
+  contribuicoes  Contribuicao[]
+  cooperativa    Cooperativa     @relation(fields: [cooperativaId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  monitoramentos Monitoramento[]
+  projetos       Projeto[]
+}
+
+model Contribuicao {
+  id            String      @id @default(cuid())
+  cooperativaId String
+  membroId      String
+  userId        String
+  loteId        String
+  quantidade    Float
+  status        String      @default("no_pool")
+  createdAt     DateTime    @default(now())
+  cooperativa   Cooperativa @relation(fields: [cooperativaId], references: [id])
+  lote          Lote        @relation(fields: [loteId], references: [id])
+  membro        Membro      @relation(fields: [membroId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+}
+
+model VendaColetiva {
+  id              String      @id @default(cuid())
+  cooperativaId   String
+  totalTCO2       Float
+  precoUnitario   Float
+  totalArrecadado Float
+  comissao        Float
+  status          String      @default("concluida")
+  createdAt       DateTime    @default(now())
+  cooperativa     Cooperativa @relation(fields: [cooperativaId], references: [id])
+}
+
+model Movimento {
+  id            String      @id @default(cuid())
+  tipo          String
+  descricao     String
+  valor         Float
+  userId        String?
+  cooperativaId String
+  createdAt     DateTime    @default(now())
+  cooperativa   Cooperativa @relation(fields: [cooperativaId], references: [id])
+  user          User?       @relation(fields: [userId], references: [id])
+}
+
+model Certificado {
+  id        String   @id @default(cuid())
+  serial    String   @unique
+  country   String   @default("BR")
+  standard  String   @default("VCS")
+  projectId String
+  year      String
+  status    String   @default("disponivel")
+  ownerId   String
+  loteId    String?
+  vendaId   String?
   createdAt DateTime @default(now())
+  owner     User     @relation(fields: [ownerId], references: [id])
+}
+
+model Projeto {
+  id             String          @id @default(cuid())
+  nome           String
+  descricao      String?
+  tipo           String          @default("Florestal")
+  status         String          @default("ativo")
+  area           Float           @default(0)
+  co2Estimado    Float           @default(0)
+  co2Verificado  Float           @default(0)
+  inicio         DateTime        @default(now())
+  userId         String
+  propertyId     String?
+  loteId         String?
+  membroId       String?
+  createdAt      DateTime        @default(now())
+  monitoramentos Monitoramento[]
+  lote           Lote?           @relation(fields: [loteId], references: [id])
+  membro         Membro?         @relation(fields: [membroId], references: [id])
+  property       Property?       @relation(fields: [propertyId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+}
+
+model Monitoramento {
+  id        String   @id @default(cuid())
+  projetoId String
+  userId    String
+  tipo      String   @default("satelite")
+  co2       Float    @default(0)
+  area      Float    @default(0)
+  ndvi      Float?
+  obs       String?
+  createdAt DateTime @default(now())
+  loteId    String?
+  membroId  String?
+  lote      Lote?    @relation(fields: [loteId], references: [id])
+  membro    Membro?  @relation(fields: [membroId], references: [id])
+  projeto   Projeto  @relation(fields: [projetoId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Compliance {
+  id        String    @id @default(cuid())
+  userId    String
+  tipo      String
+  nome      String
+  status    String    @default("pendente")
+  validade  DateTime?
+  arquivo   String?
+  obs       String?
+  createdAt DateTime  @default(now())
+  loteId    String?
+  membroId  String?
+  lote      Lote?     @relation(fields: [loteId], references: [id])
+  membro    Membro?   @relation(fields: [membroId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
 }

@@ -1,91 +1,77 @@
-/* Importação da fonte Inter - Simples e altamente legível */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-* { 
-  box-sizing: border-box; 
-  margin: 0; 
-  padding: 0; 
-  /* Suaviza a renderização da fonte em todos os navegadores */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-html, body { 
-  height: 100%; 
-  /* Substituída DM Sans por Inter para maior clareza visual */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-  background: #f7faf7; 
-  color: #111827;
-  line-height: 1.5;
-}
-
-/* Scrollbar fina e moderna */
-::-webkit-scrollbar { 
-  width: 5px; 
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb { 
-  background: #d1d5db; 
-  border-radius: 10px; 
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* Estilização de itens de navegação (Sidebar) */
-.ni { 
-  transition: all 0.2s ease-in-out; 
-  cursor: pointer; 
-  user-select: none;
-}
-
-.ni:hover { 
-  background: rgba(22,163,74,0.06) !important; 
-  transform: translateX(2px);
-}
-
-/* Estado Ativo: destaque suave em verde */
-.ni.act { 
-  background: linear-gradient(135deg, rgba(22,163,74,0.12), rgba(34,197,94,0.04)) !important; 
-  border-right: 3px solid #16a34a;
-}
-
-/* Elementos de Formulário */
-button, input, select, textarea { 
-  font-family: inherit; 
-  outline: none;
-}
-
-/* Animação suave para entrada de modais e cards */
-@keyframes slideIn {
-  from { 
-    opacity: 0; 
-    transform: translateY(12px); 
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
+
+  html, body {
+    height: 100%;
+  }
+
+  /* Evita zoom automatico em inputs no iPhone */
+  @media (max-width: 768px) {
+    input {
+      font-size: 16px !important;
+    }
   }
 }
 
-.animate-slide {
-  animation: slideIn 0.3s ease-out forwards;
+@layer components {
+  /* Scrollbar fina e moderna */
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+
+  /* Itens de navegacao (Sidebar) */
+  .ni {
+    @apply transition-all duration-200 ease-in-out cursor-pointer select-none;
+  }
+  .ni:hover {
+    background: rgba(22, 163, 74, 0.06) !important;
+    transform: translateX(2px);
+  }
+  .ni.act {
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.12), rgba(34, 197, 94, 0.04)) !important;
+    border-right: 3px solid #16a34a;
+  }
+
+  /* Animacao de entrada de cards/modais */
+  .animate-slide {
+    animation: slideIn 0.3s ease-out forwards;
+  }
 }
 
-/* Ajustes para telas touch (Celulares) */
-@media (max-width: 768px) {
-  /* Aumenta a área de clique de botões no celular */
-  button, .ni {
-    min-height: 44px;
+@layer utilities {
+  /* Aumenta a area de clique de botoes no celular */
+  @media (max-width: 768px) {
+    .tap-target {
+      min-height: 44px;
+    }
   }
-  
-  /* Evita zoom automático em inputs no iPhone */
-  input {
-    font-size: 16px !important;
+
+  /* Esconde scrollbar mantendo scroll funcional */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }
